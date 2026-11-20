@@ -228,7 +228,8 @@ module Solo5_layout = struct
       || String.length n > 67
       || not
            (String.for_all
-              (function 'a' .. 'z' | 'A' .. 'Z' | '0' .. '9' -> true | _ -> false)
+              (function
+                | 'a' .. 'z' | 'A' .. 'Z' | '0' .. '9' -> true | _ -> false)
               n)
     in
     match
@@ -237,27 +238,28 @@ module Solo5_layout = struct
           (fun m ->
             m.size <= 0
             || m.size mod align <> 0
-            || match m.address with
-               | Some a -> a <= 0 || a mod align <> 0
-               | None -> false)
+            ||
+            match m.address with
+            | Some a -> a <= 0 || a mod align <> 0
+            | None -> false)
           !user_memory,
         dup names,
         !text_start )
     with
     | Some m, _, _, _ ->
-        Action.errorf
-          "user memory %S: a name is 1 to 67 letters and digits" m.name
+        Action.errorf "user memory %S: a name is 1 to 67 letters and digits"
+          m.name
     | None, Some m, _, _ ->
         Action.errorf
-          "user memory %S: its size and address must be positive multiples \
-           of 0x%x (64 KiB)"
+          "user memory %S: its size and address must be positive multiples of \
+           0x%x (64 KiB)"
           m.name align
     | None, None, Some n, _ ->
         Action.errorf "user memory %S is declared twice" n
     | None, None, None, Some t when t < 0x100000 || t mod align <> 0 ->
         Action.errorf
-          "text_start 0x%x: the image starts at 0x100000 (1 MB) or above, at \
-           a multiple of 0x%x"
+          "text_start 0x%x: the image starts at 0x100000 (1 MB) or above, at a \
+           multiple of 0x%x"
           t align
     | _ -> Action.ok ()
 end
@@ -603,11 +605,11 @@ let configure i =
   let (module Target) = choose target in
   Solo5_layout.check () >>= fun () ->
   (match (target, !Solo5_layout.user_memory, !Solo5_layout.text_start) with
-  | `Hvt, _, _ | _, [], None -> Action.ok ()
-  | _ ->
-      Action.error
-        "user_memory and text_start are for the hvt target only (mirage \
-         configure -t hvt)")
+    | `Hvt, _, _ | _, [], None -> Action.ok ()
+    | _ ->
+        Action.error
+          "user_memory and text_start are for the hvt target only (mirage \
+           configure -t hvt)")
   >>= fun () ->
   Target.configure i >|= fun () ->
   if !output_message then (

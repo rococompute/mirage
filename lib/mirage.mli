@@ -1058,10 +1058,10 @@ type user_memory
 val user_memory : ?address:int -> size:int -> string -> user_memory
 (** [user_memory ~size name] declares user memory [name] of [size] bytes, which
     the tender places above the image. [~address] fixes its guest-physical
-    address instead, for programs linked at fixed addresses on the identity
-    map (with the image linked above them, see [~text_start] in {!register}).
-    [size] and [address] are multiples of 64 KiB; [name] is 1 to 67 letters
-    and digits. *)
+    address instead, for programs linked at fixed addresses on the identity map
+    (with the image linked above them, see [~text_start] in {!register}). [size]
+    and [address] are multiples of 64 KiB; [name] is 1 to 67 letters and digits.
+*)
 
 (** {2 Application registering} *)
 
