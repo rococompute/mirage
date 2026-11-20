@@ -1044,6 +1044,25 @@ val noop : job impl
 val runtime_args : argv impl -> job impl
 (** [runtime_args argv] is a job that loads argv. *)
 
+(** {2 Solo5 hvt image layout} *)
+
+type user_memory
+(** Solo5 user memory (hvt only): guest memory set aside for programs the
+    unikernel runs on top of itself, such as the processes of a Linux
+    personality. The unikernel's heap never includes it and, unlike the rest of
+    its memory, it may hold code that runs: it is readable, writable and
+    executable, and the unikernel enforces its programs' protections with its
+    own page tables. At run time, C code gets it with Solo5's
+    [solo5_user_memory_acquire(name, &info)]. *)
+
+val user_memory : ?address:int -> size:int -> string -> user_memory
+(** [user_memory ~size name] declares user memory [name] of [size] bytes, which
+    the tender places above the image. [~address] fixes its guest-physical
+    address instead, for programs linked at fixed addresses on the identity
+    map (with the image linked above them, see [~text_start] in {!register}).
+    [size] and [address] are multiples of 64 KiB; [name] is 1 to 67 letters
+    and digits. *)
+
 (** {2 Application registering} *)
 
 val register :
@@ -1054,6 +1073,8 @@ val register :
   ?mtime:mtime impl ->
   ?random:random impl ->
   ?src:[ `Auto | `None | `Some of string ] ->
+  ?user_memory:user_memory list ->
+  ?text_start:int ->
   string ->
   job impl list ->
   unit
@@ -1081,7 +1102,15 @@ val register :
     @param src
       The source to use in the generated opam file. If [`None] no source is
       output. If [`Some mysource] the string [mysource] is used as the source.
-      If [`Auto] (default) the is guessed from the VCS information. *)
+      If [`Auto] (default) the is guessed from the VCS information.
+    @param user_memory
+      Solo5 user memory to declare in the image's manifest (hvt only, see
+      {!user_memory}). None by default.
+    @param text_start
+      The address the hvt image is linked at, instead of 1 MB (Solo5's
+      [-z solo5-text-start]): a multiple of 64 KiB, 1 MB or above. Linking
+      higher leaves the memory below the image free, for user memory at fixed
+      addresses; the image then needs more memory ([solo5-hvt --mem]). *)
 
 module Type = Functoria.Type
 module Impl = Functoria.Impl

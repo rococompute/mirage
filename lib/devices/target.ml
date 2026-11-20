@@ -207,6 +207,61 @@ module Xen = struct
         append fmt "vif = [ %s ]" (String.concat ", " networks))
 end
 
+(* The layout of a Solo5 hvt image, set by [Mirage.register]. *)
+module Solo5_layout = struct
+  type user_memory = { name : string; address : int option; size : int }
+
+  let user_memory : user_memory list ref = ref []
+  let text_start : int option ref = ref None
+
+  (* Solo5's MFT_USER_MEMORY_ALIGN *)
+  let align = 0x10000
+
+  let check () =
+    let names = List.map (fun m -> m.name) !user_memory in
+    let rec dup = function
+      | [] -> None
+      | n :: rest -> if List.mem n rest then Some n else dup rest
+    in
+    let bad_name n =
+      n = ""
+      || String.length n > 67
+      || not
+           (String.for_all
+              (function 'a' .. 'z' | 'A' .. 'Z' | '0' .. '9' -> true | _ -> false)
+              n)
+    in
+    match
+      ( List.find_opt (fun m -> bad_name m.name) !user_memory,
+        List.find_opt
+          (fun m ->
+            m.size <= 0
+            || m.size mod align <> 0
+            || match m.address with
+               | Some a -> a <= 0 || a mod align <> 0
+               | None -> false)
+          !user_memory,
+        dup names,
+        !text_start )
+    with
+    | Some m, _, _, _ ->
+        Action.errorf
+          "user memory %S: a name is 1 to 67 letters and digits" m.name
+    | None, Some m, _, _ ->
+        Action.errorf
+          "user memory %S: its size and address must be positive multiples \
+           of 0x%x (64 KiB)"
+          m.name align
+    | None, None, Some n, _ ->
+        Action.errorf "user memory %S is declared twice" n
+    | None, None, None, Some t when t < 0x100000 || t mod align <> 0 ->
+        Action.errorf
+          "text_start 0x%x: the image starts at 0x100000 (1 MB) or above, at \
+           a multiple of 0x%x"
+          t align
+    | _ -> Action.ok ()
+end
+
 module Solo5 = struct
   open Action.Syntax
 
@@ -263,8 +318,18 @@ module Solo5 = struct
       Fmt.str {json|{ "name": %S, "type": %S }|json} name
         (match typ with `Network -> "NET_BASIC" | `Block -> "BLOCK_BASIC")
     in
+    let user_memory (m : Solo5_layout.user_memory) =
+      Fmt.str {json|{ "name": %S, "type": "USER_MEMORY", "size": %d%s }|json}
+        m.name m.size
+        (match m.address with
+        | Some a -> Fmt.str {json|, "address": %d|json} a
+        | None -> "")
+    in
     let devices =
-      if with_devices then List.map to_string (networks @ blocks) else []
+      if with_devices then
+        List.map to_string (networks @ blocks)
+        @ List.map user_memory !Solo5_layout.user_memory
+      else []
     in
     let s = String.concat ", " devices in
     let* () =
@@ -369,13 +434,17 @@ module Solo5 = struct
  (name %s)
  (modes (native exe))
  (libraries %a)
- (link_flags %a -cclib "-z solo5-abi=%s")
+ (link_flags %a -cclib "-z solo5-abi=%s"%s)
  (modules (:standard \ %a manifest))
  (foreign_stubs (language c) (names manifest))
 )
 |}
       (context_name i) main (pp_list "libraries") libraries
-      (pp_list "link_flags") flags (solo5_abi target) Fpath.pp
+      (pp_list "link_flags") flags (solo5_abi target)
+      (match (target, !Solo5_layout.text_start) with
+      | `Hvt, Some t -> Fmt.str " -cclib \"-z solo5-text-start=0x%x\"" t
+      | _ -> "")
+      Fpath.pp
       (Fpath.rem_ext (Fpath.base (Info.config_file i)))
 
   let subdir name s = Dune.stanzaf "(subdir %s\n %a)\n" name Dune.pp (Dune.v s)
@@ -532,6 +601,14 @@ let configure i =
   let open Action.Infix in
   let target = Info.get i Key.target in
   let (module Target) = choose target in
+  Solo5_layout.check () >>= fun () ->
+  (match (target, !Solo5_layout.user_memory, !Solo5_layout.text_start) with
+  | `Hvt, _, _ | _, [], None -> Action.ok ()
+  | _ ->
+      Action.error
+        "user_memory and text_start are for the hvt target only (mirage \
+         configure -t hvt)")
+  >>= fun () ->
   Target.configure i >|= fun () ->
   if !output_message then (
     output_message := false;

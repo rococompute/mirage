@@ -13,6 +13,17 @@
  (modules config_noop)
  (libraries mirage))
 
+(executable
+ (name config_user_memory)
+ (modules config_user_memory)
+ (libraries mirage))
+
+(executable
+ (name config_user_memory_bad)
+ (modules config_user_memory_bad)
+ (libraries mirage))
+
 (cram
  (package mirage)
- (deps config.exe config_noop.exe config_dash_in_name.exe))
+ (deps config.exe config_noop.exe config_dash_in_name.exe
+  config_user_memory.exe config_user_memory_bad.exe))

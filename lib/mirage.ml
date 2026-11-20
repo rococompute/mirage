@@ -401,9 +401,16 @@ let ( ++ ) acc x =
   | None, Some x -> Some [ x ]
   | Some acc, Some x -> Some (acc @ [ x ])
 
+type user_memory = Devices.Target.Solo5_layout.user_memory
+
+let user_memory ?address ~size name =
+  { Devices.Target.Solo5_layout.name; address; size }
+
 let register ?(argv = default_argv) ?(reporter = default_reporter ())
     ?(sleep = default_sleep) ?(ptime = default_ptime) ?(mtime = default_mtime)
-    ?(random = default_random) ?src name jobs =
+    ?(random = default_random) ?src ?(user_memory = []) ?text_start name jobs =
+  Devices.Target.Solo5_layout.user_memory := user_memory;
+  Devices.Target.Solo5_layout.text_start := text_start;
   if List.exists Functoria.Impl.app_has_no_arguments jobs then
     invalid_arg
       "Your configuration includes a job without arguments. Please add a \
